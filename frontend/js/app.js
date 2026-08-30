@@ -1,6 +1,33 @@
-const API='/api';
-const titles={dashboard:'Dashboard',models:'Models',benchmarks:'Benchmarks',execute:'Executar',results:'Resultats',compare:'Comparar',ranking:'Rànquing',settings:'Configuració'};
-function go(target){const button=document.querySelector(`[data-page="${target}"]`);if(!button)return;document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b===button));document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active',p.dataset.section===target));document.querySelector('#page-title').textContent=titles[target];history.replaceState(null,'',`#${target}`);}
-function setup(){document.addEventListener('click',e=>{const el=e.target.closest('[data-page]');if(el)go(el.dataset.page)});const hash=location.hash.slice(1);go(titles[hash]?hash:'dashboard')}
-async function load(){try{const [s,c]=await Promise.all([fetch(`${API}/stats`),fetch(`${API}/categories`)]);if(!s.ok||!c.ok)throw Error();const stats=await s.json(),cats=await c.json();document.querySelector('#status').textContent='● API connectada';document.querySelector('#avg-score').textContent=stats.average_score??'—';document.querySelector('#leader').textContent=stats.leader??'—';document.querySelector('#runs').textContent=stats.executions??0;document.querySelector('#fastest').textContent=stats.fastest_model??'—';document.querySelector('#categories').innerHTML=cats.map(c=>`<button class="category-card" data-page="execute"><strong>${c.name}</strong><span>${c.question_count} preguntes</span></button>`).join('')}catch{document.querySelector('#status').textContent='● Backend no disponible';document.querySelector('#categories').innerHTML='<div class="loading">No s’han pogut carregar les dades.</div>'}}
-setup();load();
+const API = '/api';
+const titles = {dashboard:'Dashboard',models:'Models',benchmarks:'Benchmarks',execute:'Executar',results:'Resultats',compare:'Comparar',ranking:'Rànquing',settings:'Configuració'};
+
+function showPage(page){
+  if(!titles[page]) page='dashboard';
+  document.querySelectorAll('.page').forEach(x=>x.classList.toggle('active',x.dataset.section===page));
+  document.querySelectorAll('#nav button').forEach(x=>x.classList.toggle('active',x.dataset.page===page));
+  document.querySelector('#page-title').textContent=titles[page];
+  history.replaceState(null,'',`#${page}`);
+}
+
+document.addEventListener('click',e=>{const b=e.target.closest('[data-page]');if(b)showPage(b.dataset.page)});
+window.addEventListener('hashchange',()=>showPage(location.hash.slice(1)));
+showPage(location.hash.slice(1) || 'dashboard');
+
+async function loadDashboard(){
+  const status=document.querySelector('#status');
+  try{
+    const response=await fetch(`${API}/stats`,{headers:{Accept:'application/json'}});
+    if(!response.ok) throw new Error();
+    const stats=await response.json();
+    status.textContent='● API connectada';
+    document.querySelector('#avg-score').textContent=stats.average_score ?? '—';
+    document.querySelector('#leader').textContent=stats.leader ?? '—';
+    document.querySelector('#runs').textContent=stats.executions ?? 0;
+    document.querySelector('#fastest').textContent=stats.fastest_model ?? '—';
+  }catch{
+    // The UI remains fully usable when the API is offline.
+    status.textContent='○ Mode local';
+    document.querySelector('#categories').innerHTML=`<div class="category-card"><strong>Backend offline</strong><span>Connecta FastAPI per carregar dades</span></div>`;
+  }
+}
+loadDashboard();
