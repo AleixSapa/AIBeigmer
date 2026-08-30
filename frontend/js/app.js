@@ -1,33 +1,14 @@
-const API = '/api';
-const titles = {dashboard:'Dashboard',models:'Models',benchmarks:'Benchmarks',execute:'Executar',results:'Resultats',compare:'Comparar',ranking:'Rànquing',settings:'Configuració'};
-
-function showPage(page){
-  if(!titles[page]) page='dashboard';
-  document.querySelectorAll('.page').forEach(x=>x.classList.toggle('active',x.dataset.section===page));
-  document.querySelectorAll('#nav button').forEach(x=>x.classList.toggle('active',x.dataset.page===page));
-  document.querySelector('#page-title').textContent=titles[page];
-  history.replaceState(null,'',`#${page}`);
-}
-
-document.addEventListener('click',e=>{const b=e.target.closest('[data-page]');if(b)showPage(b.dataset.page)});
-window.addEventListener('hashchange',()=>showPage(location.hash.slice(1)));
-showPage(location.hash.slice(1) || 'dashboard');
-
-async function loadDashboard(){
-  const status=document.querySelector('#status');
-  try{
-    const response=await fetch(`${API}/stats`,{headers:{Accept:'application/json'}});
-    if(!response.ok) throw new Error();
-    const stats=await response.json();
-    status.textContent='● API connectada';
-    document.querySelector('#avg-score').textContent=stats.average_score ?? '—';
-    document.querySelector('#leader').textContent=stats.leader ?? '—';
-    document.querySelector('#runs').textContent=stats.executions ?? 0;
-    document.querySelector('#fastest').textContent=stats.fastest_model ?? '—';
-  }catch{
-    // The UI remains fully usable when the API is offline.
-    status.textContent='○ Mode local';
-    document.querySelector('#categories').innerHTML=`<div class="category-card"><strong>Backend offline</strong><span>Connecta FastAPI per carregar dades</span></div>`;
-  }
-}
-loadDashboard();
+const API='/api';const titles={dashboard:'Dashboard',models:'Models',benchmarks:'Benchmarks',execute:'Executar',results:'Resultats',compare:'Comparar',ranking:'Rànquing',settings:'Configuració'};let categories=[],models=[],questions=[],currentQuestion=null;
+const $=s=>document.querySelector(s);async function get(path){const r=await fetch(API+path);if(!r.ok)throw Error();return r.json()}
+function showPage(p){if(!titles[p])p='dashboard';document.querySelectorAll('.page').forEach(x=>x.classList.toggle('active',x.dataset.section===p));document.querySelectorAll('#nav button').forEach(x=>x.classList.toggle('active',x.dataset.page===p));$('#page-title').textContent=titles[p];location.hash=p;if(p==='models')renderModels();if(p==='benchmarks')renderBenchmarks();if(p==='execute')renderExecute();if(p==='results')renderResults();if(p==='ranking')renderRanking();if(p==='compare')renderCompare()}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-page]');if(b)showPage(b.dataset.page)});window.addEventListener('hashchange',()=>showPage(location.hash.slice(1)));showPage(location.hash.slice(1)||'dashboard');
+async function boot(){try{[categories,models,questions]=await Promise.all([get('/categories'),get('/models'),get('/questions')]);$('#status').textContent='● API connectada';renderCategories();renderExecute();renderModels();renderBenchmarks();}catch{$('#status').textContent='○ Backend no connectat';renderCategories()}}
+function renderCategories(){$('#categories').innerHTML=categories.length?categories.map(c=>`<button class="category-card" data-page="execute" data-category="${c.id}"><strong>${c.name}</strong><span>${c.question_count} preguntes</span></button>`).join(''):'<div class="empty">No hi ha categories disponibles.</div>'}
+function renderModels(){$('#models-list').innerHTML=models.length?models.map(m=>`<div class="list-item"><b>${m.name}</b><span>${m.provider} · ${m.model_id}</span></div>`).join(''):'<div class="empty">No hi ha models configurats encara.</div>'}
+function renderBenchmarks(){$('#benchmark-list').innerHTML=`<div class="list-item"><b>AIBeigmer Core Benchmark</b><span>${categories.length} categories · preguntes configurables</span></div>`}
+function renderExecute(){const cs=$('#exec-category'),ms=$('#exec-model');if(!cs)return;cs.innerHTML=categories.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');ms.innerHTML=models.length?models.map(m=>`<option value="${m.id}">${m.name}</option>`).join(''):'<option value="">Cap model configurat</option>';loadQuestion()}
+async function loadQuestion(){const cat=$('#exec-category')?.value;if(!cat)return;try{const qs=await get('/questions?category='+encodeURIComponent(cat));currentQuestion=qs[0]||null;$('#question-box').innerHTML=currentQuestion?`<b>${currentQuestion.title}</b><p>${currentQuestion.question}</p><small>${currentQuestion.difficulty} · ${currentQuestion.evaluation_type}</small>`:'No hi ha preguntes actives en aquesta categoria.'}catch{$('#question-box').textContent='No es poden carregar les preguntes.'}}
+$('#exec-category')?.addEventListener('change',loadQuestion);$('#run-btn')?.addEventListener('click',async()=>{if(!currentQuestion||!$('#exec-model').value)return alert('Selecciona una pregunta i un model.');const r=await fetch(API+'/executions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question_id:currentQuestion.id,model_id:$('#exec-model').value})});if(r.ok){alert('Execució creada.');renderResults()}else alert('No s’ha pogut crear l’execució.')});
+async function renderResults(){try{const x=await get('/results');$('#results-list').innerHTML=x.length?x.map(r=>`<div class="list-item"><b>Execució #${r.id}</b><span>${r.status} · puntuació ${r.score??'—'}</span></div>`).join(''):'<div class="empty">Encara no hi ha resultats.</div>'}catch{}}
+function renderRanking(){$('#ranking-list').textContent='Encara no hi ha resultats suficients per crear un rànquing.'}function renderCompare(){$('#compare-list').textContent='Executa proves per generar una comparació real.'}
+boot();
