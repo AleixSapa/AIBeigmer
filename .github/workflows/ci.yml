@@ -18,8 +18,6 @@ jobs:
         run: pip install -r backend/requirements.txt
       - name: Run perfection arbiter
         run: python tools/perfection_arbiter.py
-      - name: Install backend dependencies
-        run: pip install -r backend/requirements.txt
       - name: Compile Python
         run: python -m compileall -q backend
       - name: Build Docker image
