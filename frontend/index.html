@@ -1,36 +1,17 @@
 <!doctype html>
 <html lang="ca">
-<head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>AIBeigmer</title><link rel="stylesheet" href="css/style.css">
-</head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AIBeigmer</title><link rel="stylesheet" href="css/style.css"></head>
 <body>
-  <aside class="sidebar">
-    <h1>AIBeigmer</h1>
-    <nav id="nav">
-      <button data-page="dashboard" class="active">🏠 Dashboard</button>
-      <button data-page="models">🤖 Models</button><button data-page="benchmarks">🧪 Benchmarks</button>
-      <button data-page="execute">▶ Executar</button><button data-page="results">📊 Resultats</button>
-      <button data-page="compare">⚖️ Comparar</button><button data-page="ranking">🏆 Rànquing</button>
-      <button data-page="settings">⚙️ Configuració</button>
-    </nav>
-  </aside>
-  <main>
-    <header><span>AI model benchmarking</span><span id="status">Connectant...</span></header>
-    <section class="page active" data-section="dashboard">
-      <h2>Dashboard</h2><div class="cards">
-        <article><small>Puntuació mitjana</small><strong id="avg-score">—</strong></article>
-        <article><small>Model líder</small><strong id="leader">—</strong></article>
-        <article><small>Execucions</small><strong id="runs">0</strong></article>
-        <article><small>Millor velocitat</small><strong id="fastest">—</strong></article>
-      </div><div class="panel"><h3>Categories</h3><div id="categories" class="category-grid"></div></div>
-    </section>
-    <section class="page" data-section="models"><h2>Models</h2><div class="panel empty"><h3>Cap model configurat</h3><p>Afegeix un proveïdor i un model per començar a executar benchmarks.</p></div></section>
-    <section class="page" data-section="benchmarks"><h2>Benchmarks</h2><div class="panel empty"><h3>Cap benchmark creat</h3><p>Els benchmarks i les preguntes es gestionaran des d'aquesta secció.</p></div></section>
-    <section class="page" data-section="execute"><h2>Executar</h2><div class="panel empty"><h3>Preparat per executar</h3><p>Quan hi hagi models i preguntes configurats, aquí podràs executar-les una per una.</p></div></section>
-    <section class="page" data-section="results"><h2>Resultats</h2><div class="panel empty"><h3>Encara no hi ha resultats</h3><p>Les execucions apareixeran aquí després d'avaluar respostes reals.</p></div></section>
-    <section class="page" data-section="compare"><h2>Comparar</h2><div class="panel empty"><h3>Sense dades per comparar</h3><p>Cal executar almenys un benchmark abans de comparar models.</p></div></section>
-    <section class="page" data-section="ranking"><h2>Rànquing</h2><div class="panel empty"><h3>Rànquing buit</h3><p>No es mostren puntuacions inventades: apareixeran quan hi hagi execucions reals.</p></div></section>
-    <section class="page" data-section="settings"><h2>Configuració</h2><div class="panel empty"><h3>Configuració del sistema</h3><p>Les claus API i la base de dades es configuren al backend mitjançant variables d'entorn.</p></div></section>
-  </main><script src="js/app.js"></script>
-</body></html>
+<aside class="sidebar"><div class="brand"><span class="logo">AI</span><div><b>AIBeigmer</b><small>AI Benchmark Lab</small></div></div><nav id="nav">
+<button data-page="dashboard" class="active"><span>⌂</span> Dashboard</button><button data-page="models"><span>◈</span> Models</button><button data-page="benchmarks"><span>◫</span> Benchmarks</button><button data-page="execute"><span>▶</span> Executar</button><button data-page="results"><span>◉</span> Resultats</button><button data-page="compare"><span>⇄</span> Comparar</button><button data-page="ranking"><span>♛</span> Rànquing</button><button data-page="settings"><span>⚙</span> Configuració</button>
+</nav><div class="side-note">BENCHMARK REAL<br><strong>Sense dades inventades</strong></div></aside>
+<main><header><div><small>PLATAFORMA DE BENCHMARKING</small><h1 id="page-title">Dashboard</h1></div><div id="status" class="status">● Connectant...</div></header>
+<section class="page active" data-section="dashboard"><div class="hero"><div><span class="eyebrow">AI MODEL BENCHMARKS</span><h2>Mesura. Compara. Decideix.</h2><p>Executa proves reals contra models d'IA i construeix resultats fiables.</p></div><button class="primary" data-page="execute">▶ Començar una prova</button></div><div class="cards"><article><small>Puntuació mitjana</small><strong id="avg-score">—</strong><span>Execucions reals</span></article><article><small>Model líder</small><strong id="leader">—</strong><span>Segons els resultats</span></article><article><small>Execucions</small><strong id="runs">0</strong><span>Proves completades</span></article><article><small>Model més ràpid</small><strong id="fastest">—</strong><span>Temps mitjà</span></article></div><div class="panel"><div class="panel-head"><div><small>BENCHMARK</small><h3>Categories</h3></div><span class="muted">12 categories inicials</span></div><div id="categories" class="category-grid"><div class="loading">Carregant dades...</div></div></div></section>
+<section class="page" data-section="models"><div class="panel"><div class="panel-head"><div><small>PROVEÏDORS I MODELS</small><h3>Models</h3></div></div><div id="models-list" class="empty"><b>Cap model configurat</b><p>Configura els models al backend per començar.</p></div></div></section>
+<section class="page" data-section="benchmarks"><div class="panel"><div class="panel-head"><div><small>GESTIÓ</small><h3>Benchmarks</h3></div></div><div class="empty"><b>Benchmarks preparats per configurar</b><p>Podràs crear categories, preguntes, pesos i tests.</p></div></div></section>
+<section class="page" data-section="execute"><div class="panel execute-box"><span class="big-icon">▶</span><h2>Executar una prova</h2><p>Selecciona una categoria i un model. Cada pregunta s'executarà individualment.</p><button class="primary" data-page="benchmarks">Seleccionar benchmark →</button></div></section>
+<section class="page" data-section="results"><div class="panel"><h3>Resultats</h3><div class="empty"><b>Encara no hi ha resultats</b><p>Els resultats apareixeran després d'executar proves reals.</p></div></div></section>
+<section class="page" data-section="compare"><div class="panel"><h3>Comparar models</h3><div class="empty"><b>Sense dades per comparar</b><p>Executa proves per generar una comparació.</p></div></div></section>
+<section class="page" data-section="ranking"><div class="panel"><h3>Rànquing</h3><div class="empty"><b>Rànquing buit</b><p>No es mostren puntuacions inventades.</p></div></div></section>
+<section class="page" data-section="settings"><div class="panel"><h3>Configuració</h3><div class="empty"><b>Configuració segura</b><p>Les API keys només viuen al backend mitjançant variables d'entorn.</p></div></div></section>
+</main><script src="js/app.js"></script></body></html>
