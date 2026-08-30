@@ -1,28 +1,17 @@
-from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
-
 from .config import settings
 
-# SQLite local i persistent: backend/data/aibeigmer.db
-if settings.database_url.startswith("sqlite"):
-    db_path = Path(__file__).resolve().parents[1] / "data" / "aibeigmer.db"
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    database_url = f"sqlite:///{db_path}"
-else:
-    database_url = settings.database_url
+# Production uses PostgreSQL/Supabase. SQLite is intentionally not used.
+database_url = settings.database_url
+if not database_url or database_url.startswith('sqlite'):
+    raise RuntimeError('DATABASE_URL must point to PostgreSQL/Supabase; SQLite is not supported.')
 
-engine = create_engine(
-    database_url,
-    pool_pre_ping=True,
-    connect_args={"check_same_thread": False} if database_url.startswith("sqlite") else {},
-)
+engine = create_engine(database_url, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
-
 
 class Base(DeclarativeBase):
     pass
-
 
 def get_db():
     db = SessionLocal()
