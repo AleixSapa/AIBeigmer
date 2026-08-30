@@ -8,14 +8,13 @@ from pydantic import BaseModel,Field
 from sqlalchemy import text
 from .database import engine
 
-app=FastAPI(title='AIBeigmer API',version='0.9.0',description='AI benchmarking platform')
+app=FastAPI(title='AIBeigmer API',version='1.0.0',description='AI benchmarking platform')
 app.add_middleware(CORSMiddleware,allow_origins=['*'],allow_methods=['*'],allow_headers=['*'])
 CATEGORIES=[('html','HTML',15),('css','CSS',20),('javascript','JavaScript',30),('python','Python',30),('sql','SQL',15),('backend','Backend',25),('debugging','Debugging',30),('algorithms','Algoritmes',25),('apis','APIs',15),('json','JSON',10),('linux','Linux',10),('git','Git',10)]
 PROVIDERS=['OpenAI','Google','Anthropic','DeepSeek','OpenRouter','Groq','FreeLLMAPI']
 PROVIDER_KEYS={p:p.upper().replace(' ','_')+'_API_KEY' for p in PROVIDERS}
 EVALUATION_TYPES=['unit_tests','html_validation','css_validation','json_validation','text_match','static_analysis','llm_judge','manual_review']
 FREE_CATALOG_URL='https://freellmapi.co/models'
-
 with engine.begin() as db:
  db.execute(text('''CREATE TABLE IF NOT EXISTS models(id TEXT PRIMARY KEY,name TEXT NOT NULL,provider TEXT NOT NULL,model_id TEXT NOT NULL,description TEXT DEFAULT '',context INTEGER,active INTEGER NOT NULL DEFAULT 1,created_at TEXT NOT NULL,UNIQUE(provider,model_id))'''))
  db.execute(text('''CREATE TABLE IF NOT EXISTS questions(id TEXT PRIMARY KEY,category TEXT NOT NULL,title TEXT NOT NULL,question TEXT NOT NULL,difficulty TEXT NOT NULL,language TEXT,requirements TEXT NOT NULL DEFAULT '[]',evaluation_type TEXT NOT NULL DEFAULT 'manual_review',weight REAL NOT NULL DEFAULT 1,active INTEGER NOT NULL DEFAULT 1,created_at TEXT NOT NULL)'''))
@@ -23,14 +22,12 @@ with engine.begin() as db:
 def load_models():
  with engine.connect() as db:return [dict(r) for r in db.execute(text('SELECT id,name,provider,model_id,description,context,active FROM models ORDER BY provider,name')).mappings().all()]
 def save_model(m):
- with engine.begin() as db:db.execute(text('''INSERT INTO models(id,name,provider,model_id,description,context,active,created_at) VALUES(:id,:name,:provider,:model_id,:description,:context,:active,:created_at) ON CONFLICT(provider,model_id) DO UPDATE SET name=excluded.name,description=excluded.description,context=excluded.context,active=excluded.active'''),m)
+ with engine.begin() as db:db.execute(text('''INSERT INTO models(id,name,provider,model_id,description,context,active,created_at) VALUES(:id,:name,:provider,:model_id,:description,:context,:active,:created_at) ON CONFLICT(provider,model_id) DO UPDATE SET name=excluded.name,description=excluded.description,context=excluded.context,active=1'''),m)
  return next(x for x in load_models() if x['provider']==m['provider'] and x['model_id']==m['model_id'])
 def load_questions():
  with engine.connect() as db:rows=db.execute(text('SELECT * FROM questions ORDER BY rowid')).mappings().all()
  return [{**dict(r),'requirements':json.loads(r['requirements'] or '[]'),'active':bool(r['active'])} for r in rows]
-
 def seed_questions():
- # The initial benchmark is created automatically and every seeded question is active.
  with engine.connect() as db:count=db.execute(text('SELECT COUNT(*) FROM questions')).scalar_one()
  if count>=sum(x[2] for x in CATEGORIES):
   with engine.begin() as db:db.execute(text('UPDATE questions SET active=1'))
@@ -46,15 +43,13 @@ def seed_questions():
   for q in rows:db.execute(text('''INSERT OR IGNORE INTO questions(id,category,title,question,difficulty,language,requirements,evaluation_type,weight,active,created_at) VALUES(:id,:category,:title,:question,:difficulty,:language,:requirements,:evaluation_type,:weight,:active,:created_at)'''),q)
   db.execute(text('UPDATE questions SET active=1'))
 seed_questions()
-
 class ProviderDiscoverIn(BaseModel):provider:str;api_key:str=Field(min_length=1,repr=False);base_url:str=''
 class FreeLLMDiscoverIn(BaseModel):api_key:str=Field(min_length=1,repr=False);base_url:str='http://localhost:3001/v1'
 class QuestionIn(BaseModel):category:str;title:str;question:str;difficulty:str='medium';language:str|None=None;requirements:list[str]=[];evaluation_type:str='manual_review';weight:float=1;active:bool=True
 class ExecutionIn(BaseModel):question_id:str;model_id:str
 class BenchmarkRunIn(BaseModel):model_id:str
-
 @app.get('/api/health')
-def health():return {'status':'ok','service':'AIBeigmer'}
+def health():return {'status':'ok','service':'AIBeigmer','version':'1.0.0'}
 @app.get('/api/categories')
 def categories():return [{'id':i,'name':n,'question_count':c} for i,n,c in CATEGORIES]
 @app.get('/api/providers')
@@ -66,45 +61,46 @@ def models():return load_models()
 @app.get('/api/questions')
 def questions(category:str|None=None):return [q for q in load_questions() if q['active'] and (not category or q['category']==category)]
 @app.get('/api/benchmarks')
-def benchmarks():return [{'id':'default','name':'AIBeigmer Core Benchmark','categories':len(CATEGORIES),'questions':len(load_questions()),'active_questions':sum(q['active'] for q in load_questions())}]
-
+def benchmarks():
+ qs=load_questions();return [{'id':'default','name':'AIBeigmer Core Benchmark','categories':len(CATEGORIES),'questions':len(qs),'active_questions':sum(q['active'] for q in qs)}]
 async def free_catalog_names():
  try:
   async with httpx.AsyncClient(timeout=20) as c:r=await c.get(FREE_CATALOG_URL);r.raise_for_status();html=r.text
- except Exception as e:raise HTTPException(502,f'No s’ha pogut consultar FreeLLMAPI: {e}')
- return [re.sub(r'\s+',' ',x).strip() for x in re.findall(r'<a[^>]*>([^<>]{2,100})</a>',html,re.I) if x.strip()]
+  return [re.sub(r'\s+',' ',x).strip() for x in re.findall(r'<a[^>]*>([^<>]{2,100})</a>',html,re.I) if x.strip()]
+ except Exception:
+  return []
 def norm(s):return re.sub(r'[^a-z0-9]','',str(s).lower())
 def free_match(mid,name,catalog):
+ if not catalog:return True
  vals=[norm(mid),norm(name)]
- for c in catalog:
-  n=norm(c)
-  if len(n)>=4 and any(n in v or v in n for v in vals):return c
- return None
-@app.post('/api/providers/discover')
-async def discover_provider(item:ProviderDiscoverIn):
- urls={'OpenAI':'https://api.openai.com/v1/models','DeepSeek':'https://api.deepseek.com/models','Groq':'https://api.groq.com/openai/v1/models','OpenRouter':'https://openrouter.ai/api/v1/models','Anthropic':'https://api.anthropic.com/v1/models','Google':'https://generativelanguage.googleapis.com/v1beta/models'}
- if item.provider not in urls:raise HTTPException(400,'Proveïdor no vàlid')
+ return any(len(norm(c))>=4 and (norm(c) in v or v in norm(c)) for c in catalog for v in vals)
+URLS={'OpenAI':'https://api.openai.com/v1/models','DeepSeek':'https://api.deepseek.com/models','Groq':'https://api.groq.com/openai/v1/models','OpenRouter':'https://openrouter.ai/api/v1/models','Anthropic':'https://api.anthropic.com/v1/models','Google':'https://generativelanguage.googleapis.com/v1beta/models'}
+async def discover_impl(item):
+ if item.provider not in URLS:raise HTTPException(400,'Proveïdor no vàlid')
  catalog=await free_catalog_names();headers={'Authorization':f'Bearer {item.api_key}'};params={}
  if item.provider=='Anthropic':headers={'x-api-key':item.api_key,'anthropic-version':'2023-06-01'}
  if item.provider=='Google':headers={};params={'key':item.api_key}
  try:
-  async with httpx.AsyncClient(timeout=30) as c:r=await c.get(urls[item.provider],headers=headers,params=params);r.raise_for_status();payload=r.json()
+  async with httpx.AsyncClient(timeout=30) as c:r=await c.get(URLS[item.provider],headers=headers,params=params);r.raise_for_status();payload=r.json()
  except Exception as e:raise HTTPException(502,f'No s’han pogut detectar els models: {e}')
  data=payload.get('data',[]) if isinstance(payload,dict) else payload.get('models',[]);added=[];seen=set();os.environ[PROVIDER_KEYS[item.provider]]=item.api_key
  for raw in data if isinstance(data,list) else []:
   mid=str(raw.get('id') or raw.get('name') or '').removeprefix('models/').strip();name=str(raw.get('display_name') or raw.get('name') or mid)
-  if not mid or mid in seen:continue
-  seen.add(mid)
-  if not free_match(mid,name,catalog):continue
-  context=raw.get('context_length') or raw.get('context_window') or raw.get('input_token_limit');context=context if isinstance(context,int) else None
+  if not mid or mid in seen or not free_match(mid,name,catalog):continue
+  seen.add(mid);context=raw.get('context_length') or raw.get('context_window') or raw.get('input_token_limit');context=context if isinstance(context,int) else None
   added.append(save_model({'id':f'{item.provider.lower()}-{mid}','name':name,'provider':item.provider,'model_id':mid,'description':'Model gratuït detectat segons FreeLLMAPI','context':context,'active':True,'created_at':datetime.now(timezone.utc).isoformat()}))
  return {'provider':item.provider,'detected':len(data) if isinstance(data,list) else 0,'added':len(added),'models':added}
+@app.post('/api/providers/discover')
+async def discover_provider(item:ProviderDiscoverIn):return await discover_impl(item)
+@app.post('/api/models')
+async def legacy_create_model(item:ProviderDiscoverIn):
+ return await discover_impl(item)
 @app.post('/api/providers/freellmapi/discover')
 async def discover_freellmapi(item:FreeLLMDiscoverIn):
  base=item.base_url.rstrip('/');base=base if base.endswith('/v1') else base+'/v1'
  try:
   async with httpx.AsyncClient(timeout=30) as c:r=await c.get(base+'/models',headers={'Authorization':f'Bearer {item.api_key}'});r.raise_for_status();payload=r.json()
- except Exception as e:raise HTTPException(502,f'No s’han pogut detectar els models: {e}')
+ except Exception as e:raise HTTPException(502,f'No s’han pogut detectar els models de FreeLLMAPI: {e}')
  data=payload.get('data',[]) if isinstance(payload,dict) else [];os.environ['FREELLMAPI_API_KEY']=item.api_key;os.environ['FREELLMAPI_BASE_URL']=base;added=[]
  for raw in data if isinstance(data,list) else []:
   mid=str(raw.get('id','')).strip()
@@ -115,7 +111,6 @@ def delete_model(model_id:str):
  with engine.begin() as db:r=db.execute(text('DELETE FROM models WHERE id=:id'),{'id':model_id})
  if not r.rowcount:raise HTTPException(404,'Model no trobat')
  return {'ok':True}
-
 executions=[]
 @app.post('/api/executions',status_code=201)
 def create_execution(item:ExecutionIn):
