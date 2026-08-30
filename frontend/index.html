@@ -1,38 +1,36 @@
 <!doctype html>
 <html lang="ca">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>AIBeigmer</title>
-  <link rel="stylesheet" href="css/style.css">
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>AIBeigmer</title><link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <aside class="sidebar">
     <h1>AIBeigmer</h1>
-    <nav>
-      <a class="active" href="#dashboard">🏠 Dashboard</a>
-      <a href="#models">🤖 Models</a>
-      <a href="#benchmarks">🧪 Benchmarks</a>
-      <a href="#execute">▶ Executar</a>
-      <a href="#results">📊 Resultats</a>
-      <a href="#compare">⚖️ Comparar</a>
-      <a href="#ranking">🏆 Rànquing</a>
-      <a href="#settings">⚙️ Configuració</a>
+    <nav id="nav">
+      <button data-page="dashboard" class="active">🏠 Dashboard</button>
+      <button data-page="models">🤖 Models</button><button data-page="benchmarks">🧪 Benchmarks</button>
+      <button data-page="execute">▶ Executar</button><button data-page="results">📊 Resultats</button>
+      <button data-page="compare">⚖️ Comparar</button><button data-page="ranking">🏆 Rànquing</button>
+      <button data-page="settings">⚙️ Configuració</button>
     </nav>
   </aside>
   <main>
     <header><span>AI model benchmarking</span><span id="status">Connectant...</span></header>
-    <section id="dashboard">
-      <h2>Dashboard</h2>
-      <div class="cards">
+    <section class="page active" data-section="dashboard">
+      <h2>Dashboard</h2><div class="cards">
         <article><small>Puntuació mitjana</small><strong id="avg-score">—</strong></article>
         <article><small>Model líder</small><strong id="leader">—</strong></article>
-        <article><small>Execucions</small><strong id="runs">—</strong></article>
+        <article><small>Execucions</small><strong id="runs">0</strong></article>
         <article><small>Millor velocitat</small><strong id="fastest">—</strong></article>
-      </div>
-      <div class="panel"><h3>Categories</h3><div id="categories">Carregant...</div></div>
+      </div><div class="panel"><h3>Categories</h3><div id="categories" class="category-grid"></div></div>
     </section>
-  </main>
-  <script src="js/app.js"></script>
-</body>
-</html>
+    <section class="page" data-section="models"><h2>Models</h2><div class="panel empty"><h3>Cap model configurat</h3><p>Afegeix un proveïdor i un model per començar a executar benchmarks.</p></div></section>
+    <section class="page" data-section="benchmarks"><h2>Benchmarks</h2><div class="panel empty"><h3>Cap benchmark creat</h3><p>Els benchmarks i les preguntes es gestionaran des d'aquesta secció.</p></div></section>
+    <section class="page" data-section="execute"><h2>Executar</h2><div class="panel empty"><h3>Preparat per executar</h3><p>Quan hi hagi models i preguntes configurats, aquí podràs executar-les una per una.</p></div></section>
+    <section class="page" data-section="results"><h2>Resultats</h2><div class="panel empty"><h3>Encara no hi ha resultats</h3><p>Les execucions apareixeran aquí després d'avaluar respostes reals.</p></div></section>
+    <section class="page" data-section="compare"><h2>Comparar</h2><div class="panel empty"><h3>Sense dades per comparar</h3><p>Cal executar almenys un benchmark abans de comparar models.</p></div></section>
+    <section class="page" data-section="ranking"><h2>Rànquing</h2><div class="panel empty"><h3>Rànquing buit</h3><p>No es mostren puntuacions inventades: apareixeran quan hi hagi execucions reals.</p></div></section>
+    <section class="page" data-section="settings"><h2>Configuració</h2><div class="panel empty"><h3>Configuració del sistema</h3><p>Les claus API i la base de dades es configuren al backend mitjançant variables d'entorn.</p></div></section>
+  </main><script src="js/app.js"></script>
+</body></html>
