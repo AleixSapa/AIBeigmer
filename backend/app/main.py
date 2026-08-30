@@ -7,7 +7,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-app=FastAPI(title='AIBeigmer API',version='0.4.0',description='AI benchmarking platform')
+app=FastAPI(title='AIBeigmer API',version='0.5.0',description='AI benchmarking platform')
 app.add_middleware(CORSMiddleware,allow_origins=['*'],allow_methods=['*'],allow_headers=['*'])
 CATEGORIES=[('html','HTML',15),('css','CSS',20),('javascript','JavaScript',30),('python','Python',30),('sql','SQL',15),('backend','Backend',25),('debugging','Debugging',30),('algorithms','Algoritmes',25),('apis','APIs',15),('json','JSON',10),('linux','Linux',10),('git','Git',10)]
 PROVIDERS=['OpenAI','Google','Anthropic','DeepSeek','OpenRouter','Groq']
@@ -19,6 +19,7 @@ class ModelIn(BaseModel):
 class QuestionIn(BaseModel):
  category:str;title:str;question:str;difficulty:str='medium';language:str|None=None;requirements:list[str]=[];evaluation_type:str='manual_review';weight:float=1;active:bool=True
 class ExecutionIn(BaseModel): question_id:str;model_id:str
+class BenchmarkRunIn(BaseModel): model_id:str
 @app.get('/api/health')
 def health(): return {'status':'ok','service':'AIBeigmer'}
 @app.get('/api/categories')
@@ -33,7 +34,6 @@ def models(): return models_store
 def create_model(item:ModelIn):
  if item.provider not in PROVIDERS: raise HTTPException(400,'Proveïdor no suportat')
  if any(m['model_id']==item.model_id and m['provider']==item.provider for m in models_store): raise HTTPException(409,'Aquest model ja existeix')
- # The API key is accepted only by the backend and is never returned by the API.
  os.environ[PROVIDER_KEYS[item.provider]]=item.api_key
  data=item.model_dump(exclude={'api_key'});model={'id':str(len(models_store)+1),**data};models_store.append(model);return model
 @app.patch('/api/models/{model_id}')
@@ -103,6 +103,20 @@ async def run_execution(execution_id:str):
   x.update({'status':'completed','response':response,'time_seconds':round(perf_counter()-start,3),'tokens':tokens,'tests_passed':passed,'tests_total':total,'score':score,'evaluation_type':q.get('evaluation_type'),'error':None})
  except Exception as e:x.update({'status':'error','time_seconds':round(perf_counter()-start,3),'error':str(e)})
  return x
+@app.post('/api/benchmarks/default/run')
+async def run_full_benchmark(item:BenchmarkRunIn):
+ m=next((m for m in models_store if m['id']==item.model_id and m.get('active',True)),None)
+ if not m: raise HTTPException(404,'Model no trobat o inactiu')
+ qs=[q for q in questions_store if q.get('active',True)]
+ if not qs: raise HTTPException(400,'No hi ha preguntes actives al benchmark')
+ results=[]
+ for q in qs:
+  created=create_execution(ExecutionIn(question_id=q['id'],model_id=m['id']))
+  result=await run_execution(created['id'])
+  results.append(result)
+ scores=[r['score'] for r in results if r.get('score') is not None]
+ times=[r['time_seconds'] for r in results if r.get('time_seconds') is not None]
+ return {'status':'completed','model_id':m['id'],'model':m['name'],'total':len(qs),'completed':len(results),'scored':len(scores),'average_score':round(sum(scores)/len(scores),1) if scores else None,'average_time':round(sum(times)/len(times),3) if times else None,'results':results}
 @app.get('/api/ranking')
 def ranking():
  out=[]
