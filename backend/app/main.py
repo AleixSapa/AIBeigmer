@@ -11,10 +11,11 @@ app=FastAPI(title='AIBeigmer API',version='0.4.0',description='AI benchmarking p
 app.add_middleware(CORSMiddleware,allow_origins=['*'],allow_methods=['*'],allow_headers=['*'])
 CATEGORIES=[('html','HTML',15),('css','CSS',20),('javascript','JavaScript',30),('python','Python',30),('sql','SQL',15),('backend','Backend',25),('debugging','Debugging',30),('algorithms','Algoritmes',25),('apis','APIs',15),('json','JSON',10),('linux','Linux',10),('git','Git',10)]
 PROVIDERS=['OpenAI','Google','Anthropic','DeepSeek','OpenRouter','Groq']
+PROVIDER_KEYS={'OpenAI':'OPENAI_API_KEY','DeepSeek':'DEEPSEEK_API_KEY','OpenRouter':'OPENROUTER_API_KEY','Groq':'GROQ_API_KEY','Anthropic':'ANTHROPIC_API_KEY','Google':'GOOGLE_API_KEY'}
 EVALUATION_TYPES=['unit_tests','html_validation','css_validation','json_validation','text_match','static_analysis','llm_judge','manual_review']
 models_store=[];questions_store=[];executions=[]
 class ModelIn(BaseModel):
- name:str=Field(min_length=1,max_length=100);provider:str;model_id:str;description:str='';context:int|None=None;active:bool=True
+ name:str=Field(min_length=1,max_length=100);provider:str;model_id:str;api_key:str=Field(min_length=1,repr=False);description:str='';context:int|None=None;active:bool=True
 class QuestionIn(BaseModel):
  category:str;title:str;question:str;difficulty:str='medium';language:str|None=None;requirements:list[str]=[];evaluation_type:str='manual_review';weight:float=1;active:bool=True
 class ExecutionIn(BaseModel): question_id:str;model_id:str
@@ -32,12 +33,15 @@ def models(): return models_store
 def create_model(item:ModelIn):
  if item.provider not in PROVIDERS: raise HTTPException(400,'Proveïdor no suportat')
  if any(m['model_id']==item.model_id and m['provider']==item.provider for m in models_store): raise HTTPException(409,'Aquest model ja existeix')
- model={'id':str(len(models_store)+1),**item.model_dump()};models_store.append(model);return model
+ # The API key is accepted only by the backend and is never returned by the API.
+ os.environ[PROVIDER_KEYS[item.provider]]=item.api_key
+ data=item.model_dump(exclude={'api_key'});model={'id':str(len(models_store)+1),**data};models_store.append(model);return model
 @app.patch('/api/models/{model_id}')
 def update_model(model_id:str,item:ModelIn):
  m=next((m for m in models_store if m['id']==model_id),None)
  if not m: raise HTTPException(404,'Model no trobat')
- m.update(item.model_dump());return m
+ os.environ[PROVIDER_KEYS[item.provider]]=item.api_key
+ m.update(item.model_dump(exclude={'api_key'}));return m
 @app.delete('/api/models/{model_id}')
 def delete_model(model_id:str):
  global models_store
@@ -65,9 +69,8 @@ def create_execution(item:ExecutionIn):
  if not any(m['id']==item.model_id and m.get('active',True) for m in models_store): raise HTTPException(404,'Model no trobat o inactiu')
  x={'id':str(len(executions)+1),**item.model_dump(),'status':'pending','score':None,'created_at':datetime.now(timezone.utc).isoformat()};executions.append(x);return x
 async def generate(model,prompt):
- p=model['provider'];mid=model['model_id'];keys={'OpenAI':'OPENAI_API_KEY','DeepSeek':'DEEPSEEK_API_KEY','OpenRouter':'OPENROUTER_API_KEY','Groq':'GROQ_API_KEY','Anthropic':'ANTHROPIC_API_KEY','Google':'GOOGLE_API_KEY'}
- key=os.getenv(keys[p]);
- if not key: raise RuntimeError(f'Falta {keys[p]} al backend')
+ p=model['provider'];mid=model['model_id'];key=os.getenv(PROVIDER_KEYS[p])
+ if not key: raise RuntimeError(f'Falta {PROVIDER_KEYS[p]} al backend')
  async with httpx.AsyncClient(timeout=120) as c:
   if p in {'OpenAI','DeepSeek','OpenRouter','Groq'}:
    urls={'OpenAI':'https://api.openai.com/v1/chat/completions','DeepSeek':'https://api.deepseek.com/chat/completions','OpenRouter':'https://openrouter.ai/api/v1/chat/completions','Groq':'https://api.groq.com/openai/v1/chat/completions'}
