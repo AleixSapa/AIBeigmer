@@ -1,43 +1,6 @@
-const API = '/api';
-
-function setupNavigation() {
-  const buttons = document.querySelectorAll('#nav button');
-  const pages = document.querySelectorAll('.page');
-  buttons.forEach(button => button.addEventListener('click', () => {
-    const target = button.dataset.page;
-    buttons.forEach(item => item.classList.toggle('active', item === button));
-    pages.forEach(page => page.classList.toggle('active', page.dataset.section === target));
-    history.replaceState(null, '', `#${target}`);
-  }));
-
-  const hash = location.hash.slice(1);
-  if (hash && document.querySelector(`[data-page="${hash}"]`)) {
-    document.querySelector(`[data-page="${hash}"]`).click();
-  }
-}
-
-async function loadDashboard() {
-  try {
-    const [statsResponse, categoriesResponse] = await Promise.all([
-      fetch(`${API}/stats`), fetch(`${API}/categories`)
-    ]);
-    if (!statsResponse.ok || !categoriesResponse.ok) throw new Error('API error');
-    const stats = await statsResponse.json();
-    const categories = await categoriesResponse.json();
-    document.querySelector('#status').textContent = 'API connectada';
-    document.querySelector('#avg-score').textContent = stats.average_score ?? '—';
-    document.querySelector('#leader').textContent = stats.leader ?? '—';
-    document.querySelector('#runs').textContent = stats.executions ?? 0;
-    document.querySelector('#fastest').textContent = stats.fastest_model ?? '—';
-    document.querySelector('#categories').innerHTML = categories.map(category => `
-      <button class="category-card" data-category="${category.id}">
-        <strong>${category.name}</strong><span>${category.question_count} preguntes</span>
-      </button>`).join('');
-  } catch (error) {
-    document.querySelector('#status').textContent = 'Backend no disponible';
-    document.querySelector('#categories').innerHTML = '<p>No s’ha pogut connectar amb l’API.</p>';
-  }
-}
-
-setupNavigation();
-loadDashboard();
+const API='/api';
+const titles={dashboard:'Dashboard',models:'Models',benchmarks:'Benchmarks',execute:'Executar',results:'Resultats',compare:'Comparar',ranking:'Rànquing',settings:'Configuració'};
+function go(target){const button=document.querySelector(`[data-page="${target}"]`);if(!button)return;document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b===button));document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active',p.dataset.section===target));document.querySelector('#page-title').textContent=titles[target];history.replaceState(null,'',`#${target}`);}
+function setup(){document.addEventListener('click',e=>{const el=e.target.closest('[data-page]');if(el)go(el.dataset.page)});const hash=location.hash.slice(1);go(titles[hash]?hash:'dashboard')}
+async function load(){try{const [s,c]=await Promise.all([fetch(`${API}/stats`),fetch(`${API}/categories`)]);if(!s.ok||!c.ok)throw Error();const stats=await s.json(),cats=await c.json();document.querySelector('#status').textContent='● API connectada';document.querySelector('#avg-score').textContent=stats.average_score??'—';document.querySelector('#leader').textContent=stats.leader??'—';document.querySelector('#runs').textContent=stats.executions??0;document.querySelector('#fastest').textContent=stats.fastest_model??'—';document.querySelector('#categories').innerHTML=cats.map(c=>`<button class="category-card" data-page="execute"><strong>${c.name}</strong><span>${c.question_count} preguntes</span></button>`).join('')}catch{document.querySelector('#status').textContent='● Backend no disponible';document.querySelector('#categories').innerHTML='<div class="loading">No s’han pogut carregar les dades.</div>'}}
+setup();load();
