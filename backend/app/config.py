@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     deepseek_api_key: str | None = None
     openrouter_api_key: str | None = None
     groq_api_key: str | None = None
+    freellmapi_api_key: str | None = None
+    freellmapi_base_url: str = "https://freellmapi.co/v1"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
