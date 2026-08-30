@@ -7,15 +7,17 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-app=FastAPI(title='AIBeigmer API',version='0.5.0',description='AI benchmarking platform')
+app=FastAPI(title='AIBeigmer API',version='0.6.0',description='AI benchmarking platform')
 app.add_middleware(CORSMiddleware,allow_origins=['*'],allow_methods=['*'],allow_headers=['*'])
 CATEGORIES=[('html','HTML',15),('css','CSS',20),('javascript','JavaScript',30),('python','Python',30),('sql','SQL',15),('backend','Backend',25),('debugging','Debugging',30),('algorithms','Algoritmes',25),('apis','APIs',15),('json','JSON',10),('linux','Linux',10),('git','Git',10)]
-PROVIDERS=['OpenAI','Google','Anthropic','DeepSeek','OpenRouter','Groq']
-PROVIDER_KEYS={'OpenAI':'OPENAI_API_KEY','DeepSeek':'DEEPSEEK_API_KEY','OpenRouter':'OPENROUTER_API_KEY','Groq':'GROQ_API_KEY','Anthropic':'ANTHROPIC_API_KEY','Google':'GOOGLE_API_KEY'}
+PROVIDERS=['OpenAI','Google','Anthropic','DeepSeek','OpenRouter','Groq','FreeLLMAPI']
+PROVIDER_KEYS={'OpenAI':'OPENAI_API_KEY','DeepSeek':'DEEPSEEK_API_KEY','OpenRouter':'OPENROUTER_API_KEY','Groq':'GROQ_API_KEY','Anthropic':'ANTHROPIC_API_KEY','Google':'GOOGLE_API_KEY','FreeLLMAPI':'FREELLMAPI_API_KEY'}
 EVALUATION_TYPES=['unit_tests','html_validation','css_validation','json_validation','text_match','static_analysis','llm_judge','manual_review']
 models_store=[];questions_store=[];executions=[]
 class ModelIn(BaseModel):
  name:str=Field(min_length=1,max_length=100);provider:str;model_id:str;api_key:str=Field(min_length=1,repr=False);description:str='';context:int|None=None;active:bool=True
+class FreeLLMDiscoverIn(BaseModel):
+ api_key:str=Field(min_length=1,repr=False);base_url:str='http://localhost:3001/v1'
 class QuestionIn(BaseModel):
  category:str;title:str;question:str;difficulty:str='medium';language:str|None=None;requirements:list[str]=[];evaluation_type:str='manual_review';weight:float=1;active:bool=True
 class ExecutionIn(BaseModel): question_id:str;model_id:str
@@ -36,6 +38,31 @@ def create_model(item:ModelIn):
  if any(m['model_id']==item.model_id and m['provider']==item.provider for m in models_store): raise HTTPException(409,'Aquest model ja existeix')
  os.environ[PROVIDER_KEYS[item.provider]]=item.api_key
  data=item.model_dump(exclude={'api_key'});model={'id':str(len(models_store)+1),**data};models_store.append(model);return model
+@app.post('/api/providers/freellmapi/discover')
+async def discover_freellmapi(item:FreeLLMDiscoverIn):
+ base=item.base_url.rstrip('/')
+ if not base.endswith('/v1'): base += '/v1'
+ try:
+  async with httpx.AsyncClient(timeout=30) as c:
+   r=await c.get(base+'/models',headers={'Authorization':f'Bearer {item.api_key}'})
+   r.raise_for_status();payload=r.json()
+ except Exception as e:
+  raise HTTPException(502,f'No s’han pogut detectar els models de FreeLLMAPI: {e}')
+ data=payload.get('data',[]) if isinstance(payload,dict) else []
+ if not isinstance(data,list): raise HTTPException(502,'La resposta de FreeLLMAPI no té un catàleg de models vàlid')
+ os.environ['FREELLMAPI_API_KEY']=item.api_key
+ os.environ['FREELLMAPI_BASE_URL']=base
+ added=[]
+ for raw in data:
+  mid=str(raw.get('id','')).strip()
+  if not mid: continue
+  existing=next((m for m in models_store if m['provider']=='FreeLLMAPI' and m['model_id']==mid),None)
+  if existing:
+   existing['active']=True
+   continue
+  model={'id':str(len(models_store)+1),'name':raw.get('name') or mid,'provider':'FreeLLMAPI','model_id':mid,'description':raw.get('description') or 'Model gratuït detectat automàticament per FreeLLMAPI','context':raw.get('context_length') or raw.get('context_window') or raw.get('max_model_len'),'active':True}
+  models_store.append(model);added.append(model)
+ return {'provider':'FreeLLMAPI','base_url':base,'total_detected':len(data),'added':len(added),'models':added}
 @app.patch('/api/models/{model_id}')
 def update_model(model_id:str,item:ModelIn):
  m=next((m for m in models_store if m['id']==model_id),None)
@@ -72,8 +99,8 @@ async def generate(model,prompt):
  p=model['provider'];mid=model['model_id'];key=os.getenv(PROVIDER_KEYS[p])
  if not key: raise RuntimeError(f'Falta {PROVIDER_KEYS[p]} al backend')
  async with httpx.AsyncClient(timeout=120) as c:
-  if p in {'OpenAI','DeepSeek','OpenRouter','Groq'}:
-   urls={'OpenAI':'https://api.openai.com/v1/chat/completions','DeepSeek':'https://api.deepseek.com/chat/completions','OpenRouter':'https://openrouter.ai/api/v1/chat/completions','Groq':'https://api.groq.com/openai/v1/chat/completions'}
+  if p in {'OpenAI','DeepSeek','OpenRouter','Groq','FreeLLMAPI'}:
+   urls={'OpenAI':'https://api.openai.com/v1/chat/completions','DeepSeek':'https://api.deepseek.com/chat/completions','OpenRouter':'https://openrouter.ai/api/v1/chat/completions','Groq':'https://api.groq.com/openai/v1/chat/completions','FreeLLMAPI':os.getenv('FREELLMAPI_BASE_URL','http://localhost:3001/v1').rstrip('/')+'/chat/completions'}
    r=await c.post(urls[p],headers={'Authorization':f'Bearer {key}','Content-Type':'application/json'},json={'model':mid,'messages':[{'role':'system','content':'Resolve la prova del benchmark amb precisió. Retorna només la resposta demanada.'},{'role':'user','content':prompt}],'temperature':0});r.raise_for_status();j=r.json();return j['choices'][0]['message']['content'],j.get('usage',{}).get('total_tokens')
   if p=='Anthropic':
    r=await c.post('https://api.anthropic.com/v1/messages',headers={'x-api-key':key,'anthropic-version':'2023-06-01','content-type':'application/json'},json={'model':mid,'max_tokens':4096,'temperature':0,'messages':[{'role':'user','content':prompt}]});r.raise_for_status();j=r.json();return ''.join(x.get('text','') for x in j.get('content',[])),j.get('usage',{}).get('input_tokens',0)+j.get('usage',{}).get('output_tokens',0)
@@ -112,10 +139,8 @@ async def run_full_benchmark(item:BenchmarkRunIn):
  results=[]
  for q in qs:
   created=create_execution(ExecutionIn(question_id=q['id'],model_id=m['id']))
-  result=await run_execution(created['id'])
-  results.append(result)
- scores=[r['score'] for r in results if r.get('score') is not None]
- times=[r['time_seconds'] for r in results if r.get('time_seconds') is not None]
+  result=await run_execution(created['id']);results.append(result)
+ scores=[r['score'] for r in results if r.get('score') is not None];times=[r['time_seconds'] for r in results if r.get('time_seconds') is not None]
  return {'status':'completed','model_id':m['id'],'model':m['name'],'total':len(qs),'completed':len(results),'scored':len(scores),'average_score':round(sum(scores)/len(scores),1) if scores else None,'average_time':round(sum(times)/len(times),3) if times else None,'results':results}
 @app.get('/api/ranking')
 def ranking():
